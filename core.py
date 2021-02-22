@@ -41,22 +41,16 @@ class FunctionEnterBreakpoint(gdb.Breakpoint):
         return depth
 
     def stop(self):
-        info_args = gdb.execute(
-            'info args', from_tty=False, to_string=True)
-        if info_args == 'No arguments.\n':
-            args_str = ''
-        else:
-            args_str = ', '.join(info_args.splitlines())
+        bt = gdb.execute('backtrace 1', from_tty=False, to_string=True)[len('#0  '):].split(' at ')[0].strip()
         self.runner.write_trace(
-            f"{'  ' * (self.stack_depth())}{cyan}{self._function_name}{reset_color} ({args_str})")
+            f"{'  ' * (self.stack_depth())}{bt}")
         return False  # continue immediately
-
 
 class TestCaseRunner(object):
 
     def __init__(self):
-        self.tracing_function = []
         self.trace_msg_list = []
+        self.print_lines = []
     
     def write_trace(self, msg):
         self.trace_msg_list.append(msg)
@@ -68,9 +62,11 @@ class TestCaseRunner(object):
             return
 
         print(f"{cyan}[exited] SIG {stop_signal}{reset_color}")
+    
+    def print(self, line):
+        self.print_lines.append(line)
 
     def trace_functions(self, fs):
-        self.tracing_function.extend(fs)
         for f in fs:
             FunctionEnterBreakpoint(f, self)
 
@@ -84,42 +80,44 @@ class TestCaseRunner(object):
         print(f"{cyan} >>> beg execution{reset_color}")
         gdb_ins.run(stdin=file, stdout=p)
         print(f"{cyan} <<< end execution{reset_color}")
-        
-        trace = '\n'.join(self.trace_msg_list)
-        if 'kbase_open' in trace:
-            idx = trace.find('kbase_open')
-            assert idx != -1
-            while trace[idx] != '\n':
-                idx-=1
-            trace = trace[idx:]
-            while trace[1] == ' ':
-                trace = trace.replace('\n  ', '\n')
-            print(trace[1:])
-        else:
-            print(trace)
+        print('\n'.join(self.print_lines))
+        print('\n'.join(self.trace_msg_list))
 
         print(f"{cyan}<<< end collecting of test case...{reset_color}")
 
 tcr = TestCaseRunner()
 gdb_ins.process.events.stop.connect(tcr.stop_handler)
 
-interestring_obj_types = ['T'] # + ['t']
+interestring_obj_types = ['T', 'W'] # + ['t']
 functions = dict(map(lambda ft: (ft, []), interestring_obj_types))
 
-
 binary_path = 'build/test-main'
+
+gen_regex_list = lambda _cls: lambda _method: _cls+'.*'+_method
+
+regexes = []
+
+# 'vector.*'
+regexes.append(gen_regex_list('vector')('|'.join(['push_back'])))
+
+i_regex = re.compile('|'.join(map(lambda si: f'(?:{si})', regexes)))
 
 for matched in re.finditer(
     r'[\da-f]+\s+(\S+)\s+(\S+)\n',
     subprocess.check_output(['nm', binary_path]).decode('utf8')
 ):
     symbol_type, function = matched[1], matched[2]
+    
+    if symbol_type == 'W':
+        if not i_regex.search(function):
+            continue
 
     if symbol_type in functions:
         functions[symbol_type].append(function)
 
 print('\n'.join([f'{k}:{v}' for k, v in functions.items()]))
 functions = set(sum(functions.values(), []))
+
 print(len(functions))
 
 tcr.trace_functions(list(functions))
