@@ -106,6 +106,7 @@ interestring_obj_types = ['T', 'W'] # + ['t']
 functions = dict(map(lambda ft: (ft, []), interestring_obj_types))
 
 binary_path = 'build/test-main'
+file = 'build/a.in'
 
 gen_regex_list = lambda _cls: lambda _method: f'(?P<cls>{_cls}).*(?P<method>{_method})'
 
@@ -122,7 +123,7 @@ for matched in re.finditer(
 ):
     symbol_type, function = matched[1], matched[2]
     
-    if symbol_type == 'W':
+    if symbol_type == 'W' and 'stack_show' not in function:
         matched = i_regex.search(function)
         if not matched:
             continue
@@ -135,4 +136,4 @@ print('\n'.join([f'{k}:{v}' for k, v in functions.items()]))
 functions = set(sum(functions.values(), []))
 
 tcr.trace_functions(list(functions))
-tcr.run()
+tcr.run(file)

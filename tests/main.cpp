@@ -1,17 +1,19 @@
 
 #include <cstdio>
 #include <vector>
+#include <iostream>
 
-std::vector<int> numbers;
+template<typename T>
+const T &stack_show(const T &I) { return I; }
+
 int fibnacci(int i) {
-    int res = i <=1 ? i : fibnacci(i-1) + fibnacci(i-2);
-    numbers.push_back(res);
-    return res;
+    return stack_show(i <=1 ? i : (fibnacci(i-1) + fibnacci(i-2)));
 }
 
 int main() {
-    printf("hello world");
-    fibnacci(5);
-    printf("%d\n", *numbers.begin());
+    int fib = 0;
+    scanf("%d", &fib);
+    printf("%d\n", fibnacci(fib));
+    std::cout << fibnacci(fib) << std::endl;
 }
 
